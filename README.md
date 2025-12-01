@@ -177,6 +177,6 @@ person: 0.5777 <br>
 
 ## Author
 
-**Supriya Mandal**
+**Biki Haldar**
 GitHub: [biki886](https://github.com/biki886)
 
