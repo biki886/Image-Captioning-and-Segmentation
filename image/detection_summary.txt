@@ -1,0 +1,6 @@
+Detected classes ranked by accumulated confidence (top first):
+car	12.5445
+train	0.9773
+bicycle	0.8107
+traffic light	0.7697
+person	0.5777

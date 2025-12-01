@@ -1,0 +1,307 @@
+<!--
+===============================================================================
+Image Captioning and Segmentation System
+===============================================================================
+
+This project integrates two advanced computer vision tasks into a unified system:
+
+1. **Image Captioning**  
+   Uses a Transformer-based decoder model trained on COCO captions to generate
+   natural-language descriptions of input images. The model processes extracted
+   CNN features and sequentially predicts caption tokens based on a learned
+   vocabulary.
+
+2. **Semantic Segmentation + Object Detection**  
+   Utilizes a Mask R-CNN (ResNet50 FPN) model to detect objects in an image,
+   generate instance-level segmentation masks, and draw bounding boxes around
+   top-scoring detections.
+
+The goal of this system is to demonstrate how deep learning models can work
+together to provide a richer understanding of visual data—combining pixel-level
+segmentation, object identification, and high-level caption generation.
+
+A FastAPI backend is used to run inference with both models, and a modern web
+dashboard allows users to upload images and view results such as:
+- Original image
+- Segmentation mask
+- Bounding box image
+- Generated caption
+- Top detected classes with confidence scores
+
+This project is built for educational, research, and demonstration purposes.
+
+-------------------------------------------------------------------------------
+Author
+-------------------------------------------------------------------------------
+Name: **Supriya Mandal, Madana Venkatesh & Biki Haldar**  
+GitHub: https://github.com/MSupriya4223  
+Year: 2025  
+
+If you use this code or extend it, please give proper credit to the author.
+=============================================================================== 
+-->
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Segmentation + Captioning Demo</title>
+
+  <!-- Modern clean font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: "Inter", sans-serif;
+      max-width: 1100px;
+      margin: 32px auto;
+      padding: 0 16px;
+      background: #f3f4f6;
+      color: #222;
+    }
+
+    h2 {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .small { 
+      font-size: 0.92rem; 
+      color: #555; 
+    }
+
+    input[type="file"] {
+      padding: 6px;
+      margin-right: 6px;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: 0.2s;
+    }
+    .btn:hover {
+      background: #1d4ed8;
+    }
+
+    /* Output grid responsive */
+    .outputs {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 16px;
+    }
+
+    .box {
+      padding: 16px;
+      border-radius: 10px;
+      background: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    h4 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    img {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      transition: transform 0.2s ease;
+      cursor: zoom-in;
+    }
+    img:hover {
+      transform: scale(1.01);
+    }
+
+    /* Caption box */
+    #caption, #topclasses {
+      font-size: 30px;
+      line-height: 1.5;
+      margin-top: 4px;
+    }
+
+    /* ZOOM MODAL */
+    #imageModal {
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.85);
+      justify-content:center;
+      align-items:center;
+      z-index:9999;
+      padding: 20px;
+    }
+    #imageModal img {
+      max-width:fit-content;
+      max-height:95%;
+      border-radius:2px;
+      border:2px solid #fff;
+    }
+
+    #closeModalBtn {
+      position:absolute;
+      top:24px;
+      right:24px;
+      background:#fff;
+      color:#000;
+      border:none;
+      padding:10px 20px;
+      font-size:16px;
+      cursor:pointer;
+      border-radius:6px;
+      font-weight:500;
+      box-shadow:0 2px 8px rgba(0,0,0,0.2);
+      transition:0.2s;
+    }
+    #closeModalBtn:hover {
+      background:#e5e7eb;
+    }
+
+    /* Mobile spacing */
+    @media (max-width: 500px) {
+      h2 { font-size: 22px; }
+      .btn { width: 100%; margin-top: 10px; }
+      input[type=file] { width: 100%; margin-bottom: 10px; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>Segmentation + Captioning Demo</h2>
+  <p class="small">Upload an image to run SegFormer segmentation and your custom captioning model.</p>
+
+  <div style="margin-top: 16px;">
+    <input id="file" type="file" accept="image/*"/>
+    <button id="run" class="btn">Run</button>
+  </div>
+
+  <div id="status" class="small" style="margin-top: 6px;"></div>
+
+  <!-- Images row -->
+  <div class="outputs">
+    <div class="box">
+      <h4>Original</h4>
+      <img id="orig" src="" alt="original"/>
+    </div>
+
+    <div class="box">
+      <h4>Segmentation Mask</h4>
+      <img id="mask" src="" alt="mask"/>
+    </div>
+
+    <div class="box">
+      <h4>Detection Boxes</h4>
+      <img id="boxes" src="" alt="boxes"/>
+    </div>
+  </div>
+
+  <!-- Caption + Top classes box -->
+  <div class="box" style="margin-top: 20px;">
+    <h4>Caption</h4>
+    <div id="caption">—</div>
+
+    <h4 style="margin-top: 14px;">Top Classes</h4>
+    <div id="topclasses">—</div>
+  </div>
+
+  <!-- MODAL -->
+  <div id="imageModal">
+      <button id="closeModalBtn">Return</button>
+      <img id="modalImage"/>
+  </div>
+
+<script>
+const runBtn = document.getElementById("run");
+const fileInput = document.getElementById("file");
+const status = document.getElementById("status");
+
+runBtn.onclick = async () => {
+  if (!fileInput.files.length) { alert("Choose an image first"); return; }
+  const f = fileInput.files[0];
+  const form = new FormData();
+  form.append("file", f, f.name);
+
+  status.innerText = "Uploading and running models...";
+
+  try {
+    const resp = await fetch("/predict", { method: "POST", body: form });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      status.innerText = "Error: " + data.detail;
+      return;
+    }
+
+    await fetch("/stage_tmp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tmpdir: data.tmpdir })
+    });
+    // Add timestamp to force reload
+    const ts = Date.now();  
+    
+    document.getElementById("orig").src = "/static/tmp/" + data.original + "?t=" + ts;
+    document.getElementById("mask").src = "/static/tmp/" + data.colored_mask + "?t=" + ts;
+    document.getElementById("boxes").src = "/static/tmp/" + data.boxes + "?t=" + ts;
+
+    document.getElementById("caption").innerText = data.caption;
+
+    const classesContainer = document.getElementById("topclasses");
+    classesContainer.innerHTML = "";
+    data.top_classes.forEach(c => {
+      const item = document.createElement("div");
+      item.textContent = `${c.label}: ${c.score.toFixed(4)}`;
+      classesContainer.appendChild(item);
+    });
+
+    status.innerText = "Done.";
+
+  } catch (e) {
+    console.error(e);
+    status.innerText = "Request failed: " + e;
+  }
+};
+
+/* ZOOM FEATURE */
+const modal = document.getElementById("imageModal");
+const modalImage = document.getElementById("modalImage");
+const closeModalBtn = document.getElementById("closeModalBtn");
+
+function enableZoom(id) {
+  const img = document.getElementById(id);
+  img.addEventListener("click", () => {
+    if (!img.src) return;
+    modalImage.src = img.src;
+    modal.style.display = "flex";
+  });
+}
+
+enableZoom("orig");
+enableZoom("mask");
+enableZoom("boxes");
+
+closeModalBtn.addEventListener("click", () => {
+  modal.style.display = "none";
+});
+
+modal.addEventListener("click", (e) => {
+  if (e.target === modal) {
+    modal.style.display = "none";
+  }
+});
+</script>
+
+</body>
+</html>
+
+
